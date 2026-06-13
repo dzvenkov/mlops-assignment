@@ -3,6 +3,8 @@
 ## Workflow Agreements
 
 - We will implement this assignment step by step as a learning exercise.
+- `IMPLEMENTATION.md` will be referred to as "the doc" in our conversation.
+- The doc should be updated when new workflow agreements, decisions, or clarified execution rules are established.
 - Work is split into two tracks:
   - `Local Track`: complete and validate everything possible on the local machine with a placeholder backend.
   - `H100 Track`: repeat the required final validation, tuning, measurements, and screenshots on the real VM with the H100.
@@ -23,6 +25,12 @@
 `Local Track` exists to finish code, wiring, and dry-run validation without depending on scarce H100 time. This is where we complete the assignment implementation, verify the agent flow, validate the eval runner, and prepare the observability/reporting pieces.
 
 `H100 Track` exists to generate the real assignment evidence and final deliverables. This is where we run the actual `Qwen/Qwen3-30B-A3B-Instruct-2507` endpoint, validate the final dashboard and traces, collect screenshots, run baseline and post-tuning evals, and determine the true SLO outcome.
+
+### Current Selected Local Placeholder Stack
+
+- Local backend approach: `WSL2 + vLLM + Qwen2.5-3B-Instruct`
+- Reason for selection: this keeps the local development environment closer to the real assignment architecture than a hosted API or a non-vLLM local runner.
+- Constraint note: local results remain for wiring, debugging, and learning only; final metrics and conclusions must still come from the H100 track.
 
 ## Local Track Checklist
 
