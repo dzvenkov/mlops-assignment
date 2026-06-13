@@ -44,7 +44,7 @@
    - Install dependencies.
    - Load the dataset subset required by the repo.
 
-3. `[ ]` `Observability stack startup`
+3. `[x]` `Observability stack startup`
    - Start Docker services.
    - Verify Prometheus, Grafana, and Langfuse are reachable locally.
 
@@ -221,6 +221,26 @@
   - full local `vllm` install was deferred because WSL lacks `gcc`, `g++`, and likely Python development headers
 - Next checkpoint:
   - `Local Track` checkpoint 3 `Observability stack startup`
+
+### Local Track 3 - Observability stack startup
+
+- Status: completed
+- Date: 2026-06-13
+- What was done:
+  - started Docker Desktop and launched the assignment stack with `docker compose up -d`
+  - verified the assignment containers for Prometheus, Grafana, Langfuse, Postgres, Redis, ClickHouse, and MinIO started
+  - confirmed local reachability of:
+    - `http://localhost:9090` for Prometheus
+    - `http://localhost:3000` for Grafana
+    - `http://localhost:3001` for Langfuse
+- What was learned:
+  - the observability stack works locally on the expected assignment ports once the Docker engine is running
+  - Grafana and Langfuse needed a short warm-up period before responding cleanly to HTTP checks
+- Blockers or deviations:
+  - initial startup was blocked by another local Docker stack already using ports `3000` and `9090`
+  - checkpoint completion required stopping the conflicting stack before retrying
+- Next checkpoint:
+  - `Local Track` checkpoint 4 `Placeholder backend decision and startup`
 
 ## Success Criteria For This File
 
