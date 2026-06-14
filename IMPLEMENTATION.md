@@ -31,7 +31,10 @@
 - Local backend approach: `WSL2 + vLLM + Qwen2.5-3B-Instruct`
 - Reason for selection: this keeps the local development environment closer to the real assignment architecture than a hosted API or a non-vLLM local runner.
 - Constraint note: local results remain for wiring, debugging, and learning only; final metrics and conclusions must still come from the H100 track.
-- Current bootstrap note: the WSL Python environment can be synced for the application stack, but local `vllm` installation is deferred until Linux build prerequisites such as `gcc`, `g++`, and Python development headers are available in WSL.
+- Current bootstrap note: the WSL Python environment can be synced for the application stack, and local `vllm` now depends on additional Linux build/runtime tooling such as `gcc`, `g++`, Python development headers, `nvcc`, and `ninja`.
+- Current runtime note: the main repo remains on `D:\Homework\mlops-assignment`, but the local `vllm` runtime uses a separate WSL-native repo copy at `~/mlops-assignment-wsl` because the Windows-mounted path caused WSL `p9` filesystem stalls for `transformers` and `vllm`.
+- Current version note: local `vllm` was upgraded from `0.10.2` to `0.23.0` to resolve the tokenizer compatibility issue seen with `Qwen/Qwen2.5-3B-Instruct`.
+- Current launcher note: manual local `vllm` startup uses `run_vllm.sh` from the WSL-local repo copy, not from `/mnt/d/...`.
 
 ## Local Track Checklist
 
@@ -48,12 +51,12 @@
    - Start Docker services.
    - Verify Prometheus, Grafana, and Langfuse are reachable locally.
 
-4. `[ ]` `Placeholder backend decision and startup`
+4. `[x]` `Placeholder backend decision and startup`
    - Select the local-compatible placeholder backend.
    - Configure `.env` to point the agent at it.
    - Verify the backend responds through an OpenAI-compatible interface.
 
-5. `[ ]` `Agent prompt design`
+5. `[x]` `Agent prompt design`
    - Implement prompt text for generate, verify, and revise.
    - Ensure verifier output format is strict and easy to parse.
 
@@ -241,6 +244,70 @@
   - checkpoint completion required stopping the conflicting stack before retrying
 - Next checkpoint:
   - `Local Track` checkpoint 4 `Placeholder backend decision and startup`
+
+### Local Track 4 - Placeholder backend decision and startup
+
+- Status: completed
+- Date: 2026-06-14
+- What was done:
+  - selected `Qwen/Qwen2.5-3B-Instruct` as the local placeholder model
+  - updated local `.env` to use `Qwen/Qwen2.5-3B-Instruct`
+  - verified WSL GPU visibility and PyTorch CUDA access
+  - confirmed that running heavy Python libraries from the mounted path `/mnt/d/Homework/mlops-assignment` was unreliable for local `vllm`
+  - created a WSL-native runtime repo copy at `~/mlops-assignment-wsl`
+  - installed and synced the WSL-local runtime environment there
+  - upgraded the repo dependency from `vllm 0.10.2` to `vllm 0.23.0` and refreshed `uv.lock`
+  - added a manual launcher script `run_vllm.sh` for local WSL runtime startup
+  - verified that `vllm 0.23.0` progressed through tokenizer initialization, model download, model weight loading, and compile/warmup on the WSL-local repo copy
+  - installed WSL CUDA toolkit support so `nvcc` is now available to the local runtime
+  - identified a later `flashinfer` JIT dependency on `ninja` and installed `ninja-build` in WSL
+  - reran the local server after installing `ninja-build` and collected a newer startup log from the WSL-local runtime
+  - adjusted `run_vllm.sh` to use a safer local configuration by disabling the FlashInfer sampler, pinning a conservative attention backend, and enabling eager execution
+  - copied the updated launcher into the WSL-local runtime repo and successfully started the OpenAI-compatible vLLM server on `http://localhost:8000`
+  - verified that `http://localhost:8000/metrics` exposes live `vllm:*` metrics and that Prometheus is scraping the `vllm` target successfully
+- What was learned:
+  - `vllm 0.10.2` had a tokenizer compatibility issue with the installed `transformers` stack for `Qwen/Qwen2.5-3B-Instruct`
+  - `vllm 0.23.0` resolves that tokenizer issue and gets much further into startup
+  - the WSL-local repo copy is the correct runtime location; the mounted `/mnt/d/...` repo is not reliable for local `vllm`
+  - local startup required lowering GPU memory utilization to `0.85` to clear the initial VRAM budget gate on the RTX 3060 12 GB
+  - after the NVIDIA driver update and reboot, the startup path moved past the earlier CUDA-toolkit gate and then failed later in `flashinfer` JIT compilation because `ninja` was missing
+  - after installing `ninja-build`, startup progressed further again, and the next blocker is no longer a missing executable but a `flashinfer` CUDA compilation compatibility failure
+  - on this WSL + RTX 3060 setup, a safer local profile was needed to avoid the failing `flashinfer` sampling path
+  - the local placeholder backend is now good enough for agent wiring, manual requests, and local observability validation
+- Blockers or deviations:
+  - startup required a local-only workaround for `flashinfer` CUDA compilation failure, including:
+    - `error: class "cub::_V_300302_SM_860::BlockAdjacentDifference<__nv_bool, 512, 1, 1>" has no member "FlagHeads"`
+  - related context:
+    - local runtime now passes filesystem, tokenizer, driver, VRAM-budget, `nvcc`, and `ninja` toolchain issues
+    - the workaround was to change local-serving configuration rather than continue debugging that kernel path
+- Runtime paths and artifacts:
+  - main editable repo: `D:\Homework\mlops-assignment`
+  - WSL-local runtime repo: `~/mlops-assignment-wsl`
+  - manual launcher in main repo: `run_vllm.sh`
+  - manual launcher must be copied/run from the WSL-local repo for local `vllm`
+- Next checkpoint:
+  - `Local Track` checkpoint 5 `Agent prompt design`
+
+### Local Track 5 - Agent prompt design
+
+- Status: completed
+- Date: 2026-06-14
+- What was done:
+  - implemented `GENERATE_SQL_SYSTEM` and `GENERATE_SQL_USER` in `agent/prompts.py`
+  - implemented `VERIFY_SYSTEM` and `VERIFY_USER` with a strict JSON-only contract for verifier output
+  - implemented `REVISE_SYSTEM` and `REVISE_USER` so the revise step can use the schema, prior SQL, execution result, and verifier complaint
+  - kept the prompt instructions aligned with the existing scaffold in `agent/graph.py` and the Phase 3 targets in `README.md`
+- What was learned:
+  - the safest local prompt style for this checkpoint is narrow and explicit: SQL-only for generate/revise, JSON-only for verify
+  - the verifier prompt should focus on obvious failure cases from the assignment: SQL errors, empty-but-implausible results, and mismatched answer shape
+  - the revise prompt benefits from preserving correct parts of the prior query rather than asking for a full restart every time
+- Blockers or deviations:
+  - none at the prompt-design level
+  - prompt quality against the local 3B model is still provisional and will need real behavioral validation once the graph nodes are implemented
+- Outputs or artifacts:
+  - `agent/prompts.py`
+- Next checkpoint:
+  - `Local Track` checkpoint 6 `Agent graph implementation`
 
 ## Success Criteria For This File
 
