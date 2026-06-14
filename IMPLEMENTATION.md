@@ -60,7 +60,7 @@
    - Implement prompt text for generate, verify, and revise.
    - Ensure verifier output format is strict and easy to parse.
 
-6. `[ ]` `Agent graph implementation`
+6. `[x]` `Agent graph implementation`
    - Implement `verify_node`, `revise_node`, and `route_after_verify`.
    - Keep the loop cap and history behavior aligned with the assignment.
 
@@ -308,6 +308,36 @@
   - `agent/prompts.py`
 - Next checkpoint:
   - `Local Track` checkpoint 6 `Agent graph implementation`
+
+### Local Track 6 - Agent graph implementation
+
+- Status: completed
+- Date: 2026-06-15
+- What was done:
+  - implemented `verify_node` in `agent/graph.py`
+  - implemented `revise_node` in `agent/graph.py`
+  - implemented `route_after_verify` in `agent/graph.py`
+  - added a small helper to defensively extract a JSON object from verifier output
+  - kept iteration counting aligned with the existing generate node and `MAX_ITERATIONS`
+  - validated the updated graph code from WSL against the Windows repo path using the working WSL Python environment
+- What was learned:
+  - we can keep the Windows repo as the editing source of truth while using WSL for meaningful runtime-style validation
+  - the verifier path benefits from defensive JSON extraction because even strict prompts may still be wrapped in fences or stray text
+  - the local checkpoint-6 logic is now structurally ready for end-to-end agent testing
+- Blockers or deviations:
+  - direct Windows-side environment checks were not useful for this runtime step because the working dependency environment lives in WSL
+  - no code blocker remains for checkpoint 6 itself
+- Outputs or artifacts:
+  - `agent/graph.py`
+- Verification:
+  - WSL `py_compile` check passed for the updated agent files
+  - WSL behavioral check passed for:
+    - verifier false branch
+    - verifier true branch
+    - revise SQL extraction
+    - router end/revise decisions
+- Next checkpoint:
+  - `Local Track` checkpoint 7 `Agent server smoke test`
 
 ## Success Criteria For This File
 
