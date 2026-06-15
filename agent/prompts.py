@@ -45,6 +45,8 @@ Rules:
 - Return JSON only. No markdown. No extra text.
 - Set `ok` to false if the SQL errored.
 - Set `ok` to false if the result shape clearly does not answer the question.
+- Set `ok` to false if the selected columns do not match what the question asked for.
+- Set `ok` to false if the SQL appears to miss a key entity, literal, filter, aggregation, or ordering requirement from the question.
 - Set `ok` to false if the result is empty and the question strongly suggests matching rows should exist.
 - Set `ok` to false if the query appears to answer a different question than the one asked.
 - Set `ok` to true if the result is plausible, even if you are not absolutely certain it is perfect.
@@ -82,6 +84,10 @@ Rules:
 - Output SQL only. No markdown. No explanations.
 - Use valid SQLite syntax.
 - Fix the specific problem described by the verifier.
+- Do not repeat the same SQL or make only cosmetic edits.
+- Preserve the user's intent exactly: requested columns, filters, aggregation, ordering, and limits.
+- If the question names a specific entity or quoted string, make sure the revised SQL handles it correctly.
+- If the verifier says the wrong metric or shape was returned, change the SELECT, aggregation, joins, or filters so the answer type matches the question.
 - Keep parts of the previous query that were correct when possible.
 - Use only tables and columns from the provided schema.
 - Do not modify the database.
@@ -101,5 +107,8 @@ Execution result:
 
 Verifier issue:
 {verify_issue}
+
+Previous attempts:
+{history}
 
 Write a revised SQLite query that better answers the question."""

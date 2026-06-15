@@ -105,6 +105,11 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
+def _normalize_sql(sql: str) -> str:
+    """Collapse cosmetic SQL differences so retries can be compared cheaply."""
+    return " ".join(sql.strip().rstrip(";").lower().split())
+
+
 def _looks_like_count_question(question: str) -> bool:
     q = question.lower()
     return any(
@@ -133,6 +138,16 @@ def _looks_like_list_question(question: str) -> bool:
     )
 
 
+def _looks_like_average_question(question: str) -> bool:
+    q = question.lower()
+    return any(phrase in q for phrase in ["average", "avg", "mean"])
+
+
+def _looks_like_coordinates_question(question: str) -> bool:
+    q = question.lower()
+    return any(phrase in q for phrase in ["coordinate", "coordinates", "lat", "lng", "latitude", "longitude"])
+
+
 def _has_suspicious_join(sql: str) -> bool:
     sql_lower = sql.lower()
     if " join " not in sql_lower:
@@ -140,6 +155,26 @@ def _has_suspicious_join(sql: str) -> bool:
     if " on " in sql_lower or " using " in sql_lower:
         return False
     return True
+
+
+def _extract_question_literals(question: str) -> list[str]:
+    return re.findall(r"'([^']+)'|\"([^\"]+)\"", question)
+
+
+def _flatten_literals(question: str) -> list[str]:
+    values: list[str] = []
+    for single, double in _extract_question_literals(question):
+        literal = single or double
+        literal = literal.strip()
+        if literal:
+            values.append(literal.lower())
+    return values
+
+
+def _row_shape_description(rows: list[list[Any]]) -> tuple[int, int]:
+    if not rows:
+        return 0, 0
+    return len(rows), len(rows[0]) if rows[0] else 0
 
 
 def _heuristic_verify_failure(state: AgentState) -> str | None:
@@ -154,6 +189,15 @@ def _heuristic_verify_failure(state: AgentState) -> str | None:
     if _has_suspicious_join(state.sql):
         return "Query uses JOIN without an ON or USING condition."
 
+    previous_sqls = [
+        entry.get("sql", "")
+        for entry in state.history
+        if entry.get("node") in {"generate_sql", "revise"}
+    ]
+    if len(previous_sqls) >= 2:
+        if _normalize_sql(previous_sqls[-1]) == _normalize_sql(previous_sqls[-2]):
+            return "Revision repeated the previous SQL without addressing the issue."
+
     if _looks_like_count_question(state.question):
         if execution.row_count != 1:
             return "Count question should usually return exactly one row."
@@ -164,8 +208,31 @@ def _heuristic_verify_failure(state: AgentState) -> str | None:
             if not isinstance(first_row[0], (int, float)):
                 return "Count question should usually return a numeric value."
 
+    if _looks_like_average_question(state.question):
+        if execution.row_count != 1:
+            return "Average question should usually return exactly one row."
+        if execution.rows:
+            first_row = execution.rows[0]
+            if len(first_row) != 1:
+                return "Average question should usually return exactly one value."
+            if not isinstance(first_row[0], (int, float)):
+                return "Average question should usually return a numeric value."
+
+    if _looks_like_coordinates_question(state.question):
+        row_count, column_count = _row_shape_description(execution.rows)
+        if row_count == 0:
+            return "Coordinate question should usually return at least one matching row."
+        if column_count != 2:
+            return "Coordinate question should usually return exactly two values such as latitude and longitude."
+
     if execution.row_count == 0 and _looks_like_list_question(state.question):
         return "Result is empty, but the question suggests matching rows should exist."
+
+    question_literals = _flatten_literals(state.question)
+    sql_lower = state.sql.lower()
+    missing_literals = [literal for literal in question_literals if literal not in sql_lower]
+    if missing_literals:
+        return f"SQL is missing a quoted entity or filter from the question: {missing_literals[0]!r}."
 
     return None
 
@@ -277,6 +344,7 @@ def revise_node(state: AgentState) -> dict:
             sql=state.sql,
             execution=execution_text,
             verify_issue=state.verify_issue,
+            history=_render_sql_history(state.history),
         )),
     ])
     sql = _extract_sql(response.content)
@@ -302,6 +370,20 @@ def route_after_verify(state: AgentState) -> str:
     if state.iteration >= MAX_ITERATIONS:
         return "end"
     return "revise"
+
+
+def _render_sql_history(history: list[dict[str, Any]]) -> str:
+    attempts = [
+        entry["sql"]
+        for entry in history
+        if entry.get("node") in {"generate_sql", "revise"} and entry.get("sql")
+    ]
+    if not attempts:
+        return "(none)"
+    return "\n\n".join(
+        f"Attempt {index + 1}:\n{sql}"
+        for index, sql in enumerate(attempts)
+    )
 
 
 # ---- Graph wiring -----------------------------------------------------
