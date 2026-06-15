@@ -20,6 +20,11 @@ from pathlib import Path
 
 import httpx
 
+try:
+    from agent.graph import MAX_ITERATIONS as MAX_SQL_ATTEMPTS
+except Exception:  # noqa: BLE001
+    MAX_SQL_ATTEMPTS = 3
+
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_EVAL_FILE = ROOT / "evals" / "eval_set.jsonl"
 DEFAULT_OUT_FILE = ROOT / "results" / "eval_baseline.json"
@@ -58,7 +63,80 @@ def matches(gold_rows: list[tuple] | None, pred_rows: list[tuple] | None) -> boo
 
 def eval_one(question: dict, agent_url: str) -> dict:
     """Score one question. Return a dict capturing per-iteration correctness."""
-    raise NotImplementedError("Phase 5")
+    payload = {
+        "question": question["question"],
+        "db": question["db_id"],
+        "tags": {
+            "source": "eval",
+            "phase": "baseline-eval",
+            "run": "baseline",
+        },
+    }
+
+    gold_ok, gold_rows, gold_error = run_sql(question["db_id"], question["gold_sql"])
+
+    result: dict = {
+        "db_id": question["db_id"],
+        "question": question["question"],
+        "gold_sql": question["gold_sql"],
+        "gold_ok": gold_ok,
+        "gold_error": gold_error,
+        "agent_http_ok": False,
+        "agent_status_code": None,
+        "agent_ok": False,
+        "agent_error": None,
+        "final_sql": "",
+        "iterations": 0,
+        "attempts": [],
+        "final_correct": False,
+    }
+
+    try:
+        with httpx.Client(timeout=180.0) as client:
+            resp = client.post(agent_url, json=payload)
+    except Exception as e:  # noqa: BLE001
+        result["agent_error"] = f"{type(e).__name__}: {e}"
+        return result
+
+    result["agent_status_code"] = resp.status_code
+    result["agent_http_ok"] = resp.status_code == 200
+
+    if resp.status_code != 200:
+        result["agent_error"] = resp.text
+        return result
+
+    body = resp.json()
+    result["agent_ok"] = bool(body.get("ok", False))
+    result["agent_error"] = body.get("error")
+    result["final_sql"] = body.get("sql", "")
+    result["iterations"] = int(body.get("iterations", 0))
+
+    history = body.get("history", [])
+    sql_attempts = [
+        entry.get("sql", "")
+        for entry in history
+        if entry.get("node") in {"generate_sql", "revise"} and entry.get("sql")
+    ]
+
+    for idx, sql in enumerate(sql_attempts):
+        pred_ok, pred_rows, pred_error = run_sql(question["db_id"], sql)
+        correct = gold_ok and pred_ok and matches(gold_rows, pred_rows)
+        result["attempts"].append(
+            {
+                "iteration": idx,
+                "sql": sql,
+                "exec_ok": pred_ok,
+                "exec_error": pred_error,
+                "correct": correct,
+            }
+        )
+
+    if result["attempts"]:
+        result["final_correct"] = bool(result["attempts"][-1]["correct"])
+    else:
+        result["final_correct"] = False
+
+    return result
 
 
 def summarize(results: list[dict]) -> dict:
@@ -70,7 +148,39 @@ def summarize(results: list[dict]) -> dict:
     The agent stopped emitting; whatever it had at termination is what
     would have been served had we polled at iteration k.
     """
-    raise NotImplementedError("Phase 5")
+    total = len(results)
+    final_correct = sum(1 for r in results if r.get("final_correct"))
+    avg_iterations = (
+        sum(int(r.get("iterations", 0)) for r in results) / total if total else 0.0
+    )
+
+    pass_rate_by_iteration: dict[str, float] = {}
+    for k in range(MAX_SQL_ATTEMPTS):
+        carried_correct = 0
+        for r in results:
+            attempts = r.get("attempts", [])
+            if not attempts:
+                is_correct = False
+            elif k < len(attempts):
+                is_correct = bool(attempts[k]["correct"])
+            else:
+                is_correct = bool(attempts[-1]["correct"])
+            carried_correct += int(is_correct)
+        pass_rate_by_iteration[str(k)] = (carried_correct / total) if total else 0.0
+
+    return {
+        "total_questions": total,
+        "overall_pass_rate": (final_correct / total) if total else 0.0,
+        "final_correct": final_correct,
+        "average_iterations": avg_iterations,
+        "pass_rate_by_iteration": pass_rate_by_iteration,
+        "agent_http_failures": sum(1 for r in results if not r.get("agent_http_ok")),
+        "agent_execution_failures": sum(
+            1
+            for r in results
+            if r.get("agent_http_ok") and not r.get("agent_ok", False)
+        ),
+    }
 
 
 # ---------- Main (provided) --------------------------------------------
