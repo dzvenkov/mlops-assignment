@@ -105,6 +105,71 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
+def _looks_like_count_question(question: str) -> bool:
+    q = question.lower()
+    return any(
+        phrase in q
+        for phrase in [
+            "how many",
+            "number of",
+            "count of",
+            "what is the count",
+        ]
+    )
+
+
+def _looks_like_list_question(question: str) -> bool:
+    q = question.lower()
+    return any(
+        phrase in q
+        for phrase in [
+            "list",
+            "show",
+            "which",
+            "what are",
+            "what is the coordinates",
+            "give their",
+        ]
+    )
+
+
+def _has_suspicious_join(sql: str) -> bool:
+    sql_lower = sql.lower()
+    if " join " not in sql_lower:
+        return False
+    if " on " in sql_lower or " using " in sql_lower:
+        return False
+    return True
+
+
+def _heuristic_verify_failure(state: AgentState) -> str | None:
+    """Catch obvious failures cheaply before asking the verifier LLM."""
+    execution = state.execution
+    if execution is None:
+        return "No execution result was produced."
+
+    if not execution.ok:
+        return f"SQL execution failed: {execution.error}"
+
+    if _has_suspicious_join(state.sql):
+        return "Query uses JOIN without an ON or USING condition."
+
+    if _looks_like_count_question(state.question):
+        if execution.row_count != 1:
+            return "Count question should usually return exactly one row."
+        if execution.rows:
+            first_row = execution.rows[0]
+            if len(first_row) != 1:
+                return "Count question should usually return exactly one value."
+            if not isinstance(first_row[0], (int, float)):
+                return "Count question should usually return a numeric value."
+
+    if execution.row_count == 0 and _looks_like_list_question(state.question):
+        return "Result is empty, but the question suggests matching rows should exist."
+
+    return None
+
+
 def generate_sql_node(state: AgentState) -> dict:
     """Worked example - the other LLM nodes follow this same shape.
 
@@ -148,6 +213,19 @@ def verify_node(state: AgentState) -> dict:
     What counts as "not plausible" is yours to define - see the Phase 3 targets
     in the README.
     """
+    heuristic_issue = _heuristic_verify_failure(state)
+    if heuristic_issue is not None:
+        return {
+            "verify_ok": False,
+            "verify_issue": heuristic_issue,
+            "history": state.history + [{
+                "node": "verify",
+                "ok": False,
+                "issue": heuristic_issue,
+                "source": "heuristic",
+            }],
+        }
+
     execution_text = state.execution.render() if state.execution is not None else "ERROR: no execution result"
     response = llm().invoke([
         ("system", prompts.VERIFY_SYSTEM),
@@ -175,6 +253,7 @@ def verify_node(state: AgentState) -> dict:
             "node": "verify",
             "ok": verify_ok,
             "issue": verify_issue,
+            "source": "llm",
         }],
     }
 

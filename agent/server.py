@@ -9,15 +9,18 @@ agent's final SQL, the result rows, and per-iteration history.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 load_dotenv()
 
 from agent.graph import AgentState, graph  # noqa: E402
+from agent.schema import available_dbs  # noqa: E402
 
 # Langfuse callback handler. If keys are set we initialize it; failures
 # are NOT swallowed - a misconfigured Langfuse should not silently
@@ -30,6 +33,8 @@ if os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY
 
 
 app = FastAPI()
+ROOT = Path(__file__).resolve().parent
+QUERY_PAGE = ROOT / "query_tester.html"
 
 
 class AnswerRequest(BaseModel):
@@ -50,6 +55,21 @@ class AnswerResponse(BaseModel):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/")
+def root() -> FileResponse:
+    return FileResponse(QUERY_PAGE)
+
+
+@app.get("/playground")
+def playground() -> FileResponse:
+    return FileResponse(QUERY_PAGE)
+
+
+@app.get("/dbs")
+def dbs() -> dict[str, list[str]]:
+    return {"dbs": available_dbs()}
 
 
 @app.post("/answer", response_model=AnswerResponse)
