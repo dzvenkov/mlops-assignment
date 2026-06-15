@@ -34,7 +34,7 @@
 - Current bootstrap note: the WSL Python environment can be synced for the application stack, and local `vllm` now depends on additional Linux build/runtime tooling such as `gcc`, `g++`, Python development headers, `nvcc`, and `ninja`.
 - Current runtime note: the main repo remains on `D:\Homework\mlops-assignment`, but the local `vllm` runtime uses a separate WSL-native repo copy at `~/mlops-assignment-wsl` because the Windows-mounted path caused WSL `p9` filesystem stalls for `transformers` and `vllm`.
 - Current version note: local `vllm` was upgraded from `0.10.2` to `0.23.0` to resolve the tokenizer compatibility issue seen with `Qwen/Qwen2.5-3B-Instruct`.
-- Current launcher note: manual local `vllm` startup uses `run_vllm.sh` from the WSL-local repo copy, not from `/mnt/d/...`.
+- Current launcher note: manual local `vllm` startup uses `scripts/run_vllm_local.sh` from the WSL-local repo copy, not from `/mnt/d/...`.
 
 ## Local Track Checklist
 
@@ -257,12 +257,12 @@
   - created a WSL-native runtime repo copy at `~/mlops-assignment-wsl`
   - installed and synced the WSL-local runtime environment there
   - upgraded the repo dependency from `vllm 0.10.2` to `vllm 0.23.0` and refreshed `uv.lock`
-  - added a manual launcher script `run_vllm.sh` for local WSL runtime startup
+  - added a manual launcher script `scripts/run_vllm_local.sh` for local WSL runtime startup
   - verified that `vllm 0.23.0` progressed through tokenizer initialization, model download, model weight loading, and compile/warmup on the WSL-local repo copy
   - installed WSL CUDA toolkit support so `nvcc` is now available to the local runtime
   - identified a later `flashinfer` JIT dependency on `ninja` and installed `ninja-build` in WSL
   - reran the local server after installing `ninja-build` and collected a newer startup log from the WSL-local runtime
-  - adjusted `run_vllm.sh` to use a safer local configuration by disabling the FlashInfer sampler, pinning a conservative attention backend, and enabling eager execution
+  - adjusted `scripts/run_vllm_local.sh` to use a safer local configuration by disabling the FlashInfer sampler, pinning a conservative attention backend, and enabling eager execution
   - copied the updated launcher into the WSL-local runtime repo and successfully started the OpenAI-compatible vLLM server on `http://localhost:8000`
   - verified that `http://localhost:8000/metrics` exposes live `vllm:*` metrics and that Prometheus is scraping the `vllm` target successfully
 - What was learned:
@@ -283,7 +283,7 @@
 - Runtime paths and artifacts:
   - main editable repo: `D:\Homework\mlops-assignment`
   - WSL-local runtime repo: `~/mlops-assignment-wsl`
-  - manual launcher in main repo: `run_vllm.sh`
+  - manual launcher in main repo: `scripts/run_vllm_local.sh`
   - manual launcher must be copied/run from the WSL-local repo for local `vllm`
 - Next checkpoint:
   - `Local Track` checkpoint 5 `Agent prompt design`
