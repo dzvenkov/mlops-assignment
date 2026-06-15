@@ -143,6 +143,11 @@ def _looks_like_average_question(question: str) -> bool:
     return any(phrase in q for phrase in ["average", "avg", "mean"])
 
 
+def _looks_like_percentage_question(question: str) -> bool:
+    q = question.lower()
+    return any(phrase in q for phrase in ["percentage", "percent", "ratio", "fraction"])
+
+
 def _looks_like_coordinates_question(question: str) -> bool:
     q = question.lower()
     return any(phrase in q for phrase in ["coordinate", "coordinates", "lat", "lng", "latitude", "longitude"])
@@ -175,6 +180,42 @@ def _row_shape_description(rows: list[list[Any]]) -> tuple[int, int]:
     if not rows:
         return 0, 0
     return len(rows), len(rows[0]) if rows[0] else 0
+
+
+def _expected_output_keywords(question: str) -> list[str]:
+    q = question.lower()
+    keywords: list[str] = []
+    mapping = [
+        ("street", "street"),
+        ("city", "city"),
+        ("zip", "zip"),
+        ("state", "state"),
+        ("latitude", "lat"),
+        ("longitude", "lng"),
+        ("coordinate", "lat"),
+        ("coordinate", "lng"),
+        ("coordinates", "lat"),
+        ("coordinates", "lng"),
+        ("superpower", "power"),
+        ("powers", "power"),
+        ("identification number", "id"),
+        ("id", "id"),
+        ("name", "name"),
+    ]
+    for phrase, keyword in mapping:
+        if phrase in q and keyword not in keywords:
+            keywords.append(keyword)
+    return keywords
+
+
+def _columns_match_question(columns: list[str] | None, question: str) -> bool:
+    if not columns:
+        return True
+    expected_keywords = _expected_output_keywords(question)
+    if not expected_keywords:
+        return True
+    lowered = [column.lower() for column in columns]
+    return all(any(keyword in column for column in lowered) for keyword in expected_keywords)
 
 
 def _heuristic_verify_failure(state: AgentState) -> str | None:
@@ -218,12 +259,29 @@ def _heuristic_verify_failure(state: AgentState) -> str | None:
             if not isinstance(first_row[0], (int, float)):
                 return "Average question should usually return a numeric value."
 
+    if _looks_like_percentage_question(state.question):
+        if execution.row_count != 1:
+            return "Percentage question should usually return exactly one row."
+        if execution.rows:
+            first_row = execution.rows[0]
+            if len(first_row) != 1:
+                return "Percentage question should usually return exactly one value."
+            if not isinstance(first_row[0], (int, float)):
+                return "Percentage question should usually return a numeric value."
+
     if _looks_like_coordinates_question(state.question):
         row_count, column_count = _row_shape_description(execution.rows)
         if row_count == 0:
             return "Coordinate question should usually return at least one matching row."
         if column_count != 2:
             return "Coordinate question should usually return exactly two values such as latitude and longitude."
+        question_lower = state.question.lower()
+        sql_lower = state.sql.lower()
+        if any(phrase in question_lower for phrase in ["grand prix", "race"]) and "join" not in sql_lower:
+            return "Question refers to a race event, so the query should usually join through the race table instead of filtering circuits directly."
+
+    if not _columns_match_question(execution.columns, state.question):
+        return "Selected columns do not match the fields requested in the question."
 
     if execution.row_count == 0 and _looks_like_list_question(state.question):
         return "Result is empty, but the question suggests matching rows should exist."

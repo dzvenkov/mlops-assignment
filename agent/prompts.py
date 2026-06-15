@@ -49,6 +49,10 @@ Rules:
 - Set `ok` to false if the SQL appears to miss a key entity, literal, filter, aggregation, or ordering requirement from the question.
 - Set `ok` to false if the result is empty and the question strongly suggests matching rows should exist.
 - Set `ok` to false if the query appears to answer a different question than the one asked.
+- Be suspicious of plausible-looking near misses, for example:
+  - filtering the venue table directly when the question is about a race event
+  - returning the wrong metric column (for example one district statistic instead of another)
+  - returning the right shape but with extra columns for a scalar question
 - Set `ok` to true if the result is plausible, even if you are not absolutely certain it is perfect.
 - Keep `issue` short, concrete, and actionable for a revision step.
 - If `ok` is true, set `issue` to an empty string or a very short note.
@@ -87,10 +91,29 @@ Rules:
 - Do not repeat the same SQL or make only cosmetic edits.
 - Preserve the user's intent exactly: requested columns, filters, aggregation, ordering, and limits.
 - If the question names a specific entity or quoted string, make sure the revised SQL handles it correctly.
+- Keep categorical values and casing grounded in the question or schema. Do not casually rewrite values such as `M` to `m`, `Commentator` to `commentator`, `+` to `carcinogenic`, or `cl` to `Cl` unless the schema evidence clearly supports it.
 - If the verifier says the wrong metric or shape was returned, change the SELECT, aggregation, joins, or filters so the answer type matches the question.
+- If the question is about an event such as a race, grand prix, badge award, or account opening, prefer the join path that connects that event to the entity being returned instead of filtering a nearby table directly.
 - Keep parts of the previous query that were correct when possible.
 - Use only tables and columns from the provided schema.
 - Do not modify the database.
+
+Examples:
+Question: "How many male clients in 'Hl.m. Praha' district?"
+Bad revision: WHERE c.gender = 'm'
+Better revision: keep the categorical value exactly as supported by the schema and question, e.g. WHERE c.gender = 'M'
+
+Question: "How many users received commentator badges in 2014?"
+Bad revision: WHERE Name = 'commentator'
+Better revision: preserve the exact badge value when needed, e.g. WHERE Name = 'Commentator'
+
+Question: "What is the coordinates location of the circuits for Australian grand prix?"
+Bad revision: SELECT lat, lng FROM circuits WHERE name = 'Australian Grand Prix'
+Better revision: join races to circuits and filter on the race name `Australian Grand Prix`
+
+Question: "Calculate the percentage of carcinogenic molecules which contain the Chlorine element."
+Bad revision: rewrite labels into guessed natural-language enums or return multiple debug columns
+Better revision: return one scalar percentage and use the actual schema values and grain of counting required by the data
 """
 
 REVISE_USER = """Schema:
