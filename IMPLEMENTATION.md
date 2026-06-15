@@ -64,7 +64,7 @@
    - Implement `verify_node`, `revise_node`, and `route_after_verify`.
    - Keep the loop cap and history behavior aligned with the assignment.
 
-7. `[ ]` `Agent server smoke test`
+7. `[x]` `Agent server smoke test`
    - Run the agent server.
    - Send manual `/answer` requests.
    - Confirm at least one question exercises a revise loop.
@@ -338,6 +338,34 @@
     - router end/revise decisions
 - Next checkpoint:
   - `Local Track` checkpoint 7 `Agent server smoke test`
+
+### Local Track 7 - Agent server smoke test
+
+- Status: completed
+- Date: 2026-06-15
+- What was done:
+  - launched the agent server on `http://localhost:8001`
+  - added a lightweight browser tester page exposed at `/` and `/playground`
+  - verified `/health`, `/dbs`, and `/answer` responses from the running server
+  - sent multiple manual `/answer` requests against the local `vllm` backend
+  - tightened `verify_node` with heuristic guardrails and re-ran the smoke test
+- What was learned:
+  - the agent stack is wired end to end: browser/client -> agent server -> local `vllm` -> SQL execution -> response
+  - the local playground is sufficient for manual agent validation without relying on repeated `curl` commands
+  - local smoke validation is good enough to continue, even though verifier quality is still imperfect on some semantically wrong answers
+- Blockers or deviations:
+  - at local-model quality level, the verifier remained more permissive than ideal and did not reliably force a revise loop on every obviously bad answer
+  - despite that residual risk, checkpoint 7 is accepted as complete for local wiring purposes
+- Outputs or artifacts:
+  - `agent/server.py`
+  - `agent/query_tester.html`
+  - `agent/graph.py`
+- Verification:
+  - `http://localhost:8001/health` returned healthy status
+  - manual `/answer` requests returned final SQL, rows, iteration counts, and history
+  - browser tester page loaded successfully from the running agent server
+- Next checkpoint:
+  - `Local Track` checkpoint 8 `Langfuse local tracing hookup`
 
 ## Success Criteria For This File
 
