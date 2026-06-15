@@ -2,7 +2,7 @@
   "title": "vLLM serving",
   "uid": "vllm-serving",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "5s",
   "tags": ["vllm", "serving", "assignment"],
   "time": {
@@ -18,11 +18,19 @@
   },
   "panels": [
     {
+      "id": 100,
+      "type": "row",
+      "title": "Throughput and Concurrency",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
       "id": 1,
       "type": "timeseries",
       "title": "Requests running",
       "description": "Active requests currently executing on vLLM.",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -53,7 +61,7 @@
       "type": "timeseries",
       "title": "Requests waiting",
       "description": "Queued requests waiting for scheduling capacity.",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -80,44 +88,11 @@
       }
     },
     {
-      "id": 3,
-      "type": "timeseries",
-      "title": "KV cache usage %",
-      "description": "Fraction of KV cache capacity currently in use.",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "100 * vllm:kv_cache_usage_perc",
-          "legendFormat": "kv cache %"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      }
-    },
-    {
       "id": 4,
       "type": "timeseries",
       "title": "Generated tokens / sec",
       "description": "Rate of output tokens produced by vLLM.",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -148,7 +123,7 @@
       "type": "timeseries",
       "title": "Prompt tokens / sec",
       "description": "Rate of prefill tokens processed by vLLM.",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -179,7 +154,7 @@
       "type": "timeseries",
       "title": "Successful requests / sec",
       "description": "Rate of successfully completed requests, grouped by finish reason.",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -206,11 +181,19 @@
       }
     },
     {
+      "id": 101,
+      "type": "row",
+      "title": "Latency Breakdown",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
       "id": 7,
       "type": "timeseries",
       "title": "Queue time p50 / p95",
       "description": "Time requests spend waiting before running.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -247,7 +230,7 @@
       "type": "timeseries",
       "title": "Inference time p50 / p95",
       "description": "Time requests spend in the RUNNING phase.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -284,7 +267,7 @@
       "type": "timeseries",
       "title": "Prefill time p50 / p95",
       "description": "Latency during the prefill stage.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 26 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -321,7 +304,7 @@
       "type": "timeseries",
       "title": "Decode time p50 / p95",
       "description": "Latency during the decode stage.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 26 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -340,6 +323,47 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 102,
+      "type": "row",
+      "title": "KV Cache Headroom",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "KV cache usage %",
+      "description": "Fraction of KV cache capacity currently in use.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 35 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "100 * vllm:kv_cache_usage_perc",
+          "legendFormat": "kv cache %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
