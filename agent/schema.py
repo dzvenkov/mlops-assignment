@@ -24,6 +24,13 @@ def _q(ident: str) -> str:
     return '"' + ident.replace('"', '""') + '"'
 
 
+def _format_fk(ref_table: str | None, from_col: str | None, to_col: str | None) -> str | None:
+    """Render a foreign key if SQLite exposes complete metadata for it."""
+    if not ref_table or not from_col or not to_col:
+        return None
+    return f"  FOREIGN KEY ({_q(from_col)}) REFERENCES {_q(ref_table)}({_q(to_col)})"
+
+
 @lru_cache(maxsize=32)
 def render_schema(db_id: str) -> str:
     path = db_path(db_id)
@@ -52,9 +59,9 @@ def render_schema(db_id: str) -> str:
                 col_lines.append(line)
             for fk in conn.execute(f"PRAGMA foreign_key_list({_q(t)})"):
                 # (id, seq, ref_table, from, to, on_update, on_delete, match)
-                col_lines.append(
-                    f"  FOREIGN KEY ({_q(fk[3])}) REFERENCES {_q(fk[2])}({_q(fk[4])})"
-                )
+                fk_line = _format_fk(fk[2], fk[3], fk[4])
+                if fk_line is not None:
+                    col_lines.append(fk_line)
             parts.append(",\n".join(col_lines))
             parts.append(");")
     return "\n".join(parts)
