@@ -39,6 +39,7 @@ VLLM_MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-30B-A3B-Instruct-2507")
 # Lets you point the agent at e.g. OpenAI while iterating without a running vLLM.
 LLM_API_KEY = os.environ.get("OPENAI_API_KEY", "not-needed")
 SKIP_VERIFY = os.environ.get("AGENT_SKIP_VERIFY", "").lower() in {"1", "true", "yes"}
+LLM_TIMEOUT_SECONDS = float(os.environ.get("AGENT_LLM_TIMEOUT_SECONDS", "20"))
 
 
 @dataclass
@@ -63,6 +64,7 @@ def llm() -> ChatOpenAI:
         base_url=VLLM_BASE_URL,
         api_key=LLM_API_KEY,
         temperature=0.0,
+        timeout=LLM_TIMEOUT_SECONDS,
     )
 
 
