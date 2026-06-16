@@ -33,9 +33,10 @@ async def fire_one(
     url: str,
     question: dict,
     results: list[dict],
+    launched_at: float,
 ) -> None:
     payload = {"question": question["question"], "db": question["db_id"]}
-    t0 = time.monotonic()
+    t0 = launched_at
     status = "ok"
     err: str | None = None
     http_status: int | None = None
@@ -60,6 +61,8 @@ async def fire_one(
         "http_status": http_status,
         "response_body": response_body,
         "db_id": question["db_id"],
+        "launched_at_seconds": launched_at,
+        "completed_at_seconds": time.monotonic(),
     })
 
 
@@ -79,10 +82,14 @@ async def drive(args: argparse.Namespace) -> None:
         start = time.monotonic()
         deadline = start + args.duration
         tasks: list[asyncio.Task] = []
+        task_started_at: dict[asyncio.Task, float] = {}
         next_fire = start
         while time.monotonic() < deadline:
             q = rnd.choice(questions)
-            tasks.append(asyncio.create_task(fire_one(session, args.agent_url, q, results)))
+            launched_at = time.monotonic()
+            task = asyncio.create_task(fire_one(session, args.agent_url, q, results, launched_at))
+            tasks.append(task)
+            task_started_at[task] = launched_at
             next_fire += interval
             sleep_for = next_fire - time.monotonic()
             if sleep_for > 0:
@@ -91,8 +98,14 @@ async def drive(args: argparse.Namespace) -> None:
         active_end = time.monotonic()
         if tasks:
             await asyncio.wait(tasks, timeout=60.0)
-        wall = time.monotonic() - start
+        finished_at = time.monotonic()
+        wall = finished_at - start
         pending_after_drain = sum(1 for task in tasks if not task.done())
+        pending_ages = [
+            finished_at - task_started_at[task]
+            for task in tasks
+            if not task.done()
+        ]
 
     latencies = sorted(r["latency_seconds"] for r in results if r["status"] == "ok")
     status_counts = Counter(r["status"] for r in results)
@@ -123,6 +136,8 @@ async def drive(args: argparse.Namespace) -> None:
         "http_errors": status_counts["http_error"],
         "client_errors": status_counts["client_error"],
         "pending_after_drain": pending_after_drain,
+        "pending_age_max_seconds": max(pending_ages) if pending_ages else 0.0,
+        "pending_age_min_seconds": min(pending_ages) if pending_ages else 0.0,
         "http_status_counts": dict(sorted(http_status_counts.items())),
         "error_counts": dict(error_counts.most_common(10)),
         "latency_p50": pct(0.50),
