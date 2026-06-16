@@ -30,8 +30,8 @@ from agent.execution import ExecutionResult, execute_sql
 from agent.schema import render_schema
 
 # Total generate + revise calls before the loop is forced to stop.
-# Keep one revision round for Phase 6 latency/quality tradeoff testing.
-MAX_ITERATIONS = 2
+# Keep one SQL attempt for Phase 6 latency/quality tradeoff testing.
+MAX_ITERATIONS = 1
 
 VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
 VLLM_MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-30B-A3B-Instruct-2507")
