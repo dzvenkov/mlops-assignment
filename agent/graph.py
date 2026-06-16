@@ -38,6 +38,7 @@ VLLM_MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-30B-A3B-Instruct-2507")
 # vLLM ignores the key, but a hosted OpenAI-compatible provider needs a real one.
 # Lets you point the agent at e.g. OpenAI while iterating without a running vLLM.
 LLM_API_KEY = os.environ.get("OPENAI_API_KEY", "not-needed")
+SKIP_VERIFY = os.environ.get("AGENT_SKIP_VERIFY", "").lower() in {"1", "true", "yes"}
 
 
 @dataclass
@@ -267,6 +268,13 @@ def execute_node(state: AgentState) -> dict:
     return {"execution": execute_sql(state.db_id, state.sql)}
 
 
+def route_after_execute(state: AgentState) -> str:
+    """Optionally bypass verify/revise for Phase 6 latency experiments."""
+    if SKIP_VERIFY:
+        return "end"
+    return "verify"
+
+
 def verify_node(state: AgentState) -> dict:
     """Decide whether state.execution plausibly answers state.question.
 
@@ -399,7 +407,11 @@ def build_graph():
     g.add_edge(START, "attach_schema")
     g.add_edge("attach_schema", "generate_sql")
     g.add_edge("generate_sql", "execute")
-    g.add_edge("execute", "verify")
+    g.add_conditional_edges(
+        "execute",
+        route_after_execute,
+        {"verify": "verify", "end": END},
+    )
     g.add_conditional_edges(
         "verify",
         route_after_verify,
