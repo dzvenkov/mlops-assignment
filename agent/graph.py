@@ -303,7 +303,7 @@ def verify_node(state: AgentState) -> dict:
             }],
         }
 
-    execution_text = state.execution.render() if state.execution is not None else "ERROR: no execution result"
+    execution_text = state.execution.render(max_rows=3) if state.execution is not None else "ERROR: no execution result"
     response = llm().invoke([
         ("system", prompts.VERIFY_SYSTEM),
         ("user", prompts.VERIFY_USER.format(
@@ -345,7 +345,7 @@ def revise_node(state: AgentState) -> dict:
 
     Return: {"sql": <str>, "iteration": state.iteration + 1, ...}.
     """
-    execution_text = state.execution.render() if state.execution is not None else "ERROR: no execution result"
+    execution_text = state.execution.render(max_rows=3) if state.execution is not None else "ERROR: no execution result"
     response = llm().invoke([
         ("system", prompts.REVISE_SYSTEM),
         ("user", prompts.REVISE_USER.format(
