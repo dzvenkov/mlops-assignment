@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="$ROOT_DIR/logs"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8001}"
+WORKERS="${WORKERS:-1}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="$LOG_DIR/agent-$TIMESTAMP.log"
 PID_FILE="$LOG_DIR/agent.pid"
@@ -56,7 +57,7 @@ kill_existing_agent() {
 
 start_agent() {
   cd "$ROOT_DIR"
-  nohup uv run uvicorn agent.server:app --host "$HOST" --port "$PORT" >"$LOG_FILE" 2>&1 &
+  nohup uv run uvicorn agent.server:app --host "$HOST" --port "$PORT" --workers "$WORKERS" >"$LOG_FILE" 2>&1 &
   local pid=$!
   echo "$pid" >"$PID_FILE"
   sleep 2
@@ -64,6 +65,7 @@ start_agent() {
   if kill -0 "$pid" 2>/dev/null; then
     echo "Agent started on http://localhost:$PORT"
     echo "PID: $pid"
+    echo "Workers: $WORKERS"
     echo "Log: $LOG_FILE"
   else
     echo "Agent failed to stay up. Check log: $LOG_FILE" >&2
