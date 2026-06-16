@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import Counter
 import json
 import random
 import time
@@ -37,12 +38,16 @@ async def fire_one(
     t0 = time.monotonic()
     status = "ok"
     err: str | None = None
+    http_status: int | None = None
+    response_body: str | None = None
     try:
         async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=120)) as resp:
-            await resp.read()
+            http_status = resp.status
+            body = await resp.text()
             if resp.status != 200:
                 status = "http_error"
                 err = f"HTTP {resp.status}"
+                response_body = body[:1000]
     except asyncio.TimeoutError:
         status = "timeout"
     except Exception as e:  # noqa: BLE001
@@ -52,6 +57,9 @@ async def fire_one(
         "latency_seconds": time.monotonic() - t0,
         "status": status,
         "error": err,
+        "http_status": http_status,
+        "response_body": response_body,
+        "db_id": question["db_id"],
     })
 
 
@@ -80,11 +88,18 @@ async def drive(args: argparse.Namespace) -> None:
             if sleep_for > 0:
                 await asyncio.sleep(sleep_for)
         # let in-flight finish (cap drain at 60s)
+        active_end = time.monotonic()
         if tasks:
             await asyncio.wait(tasks, timeout=60.0)
         wall = time.monotonic() - start
+        pending_after_drain = sum(1 for task in tasks if not task.done())
 
     latencies = sorted(r["latency_seconds"] for r in results if r["status"] == "ok")
+    status_counts = Counter(r["status"] for r in results)
+    http_status_counts = Counter(
+        str(r["http_status"]) for r in results if r.get("http_status") is not None
+    )
+    error_counts = Counter(r["error"] or "" for r in results if r["status"] != "ok")
 
     def pct(p: float) -> float:
         if not latencies:
@@ -96,12 +111,20 @@ async def drive(args: argparse.Namespace) -> None:
         "requested_rps": args.rps,
         "duration_seconds": args.duration,
         "wall_clock_seconds": wall,
+        "active_window_seconds": active_end - start,
+        "drain_seconds": wall - (active_end - start),
         "total_requests": len(results),
         "achieved_rps": (len(results) / wall) if wall > 0 else 0.0,
-        "ok": sum(1 for r in results if r["status"] == "ok"),
-        "timeouts": sum(1 for r in results if r["status"] == "timeout"),
-        "http_errors": sum(1 for r in results if r["status"] == "http_error"),
-        "client_errors": sum(1 for r in results if r["status"] == "client_error"),
+        "scheduled_rps": len(tasks) / args.duration,
+        "ok_per_active_second": status_counts["ok"] / args.duration,
+        "error_rate": (len(results) - status_counts["ok"]) / len(results) if results else 0.0,
+        "ok": status_counts["ok"],
+        "timeouts": status_counts["timeout"],
+        "http_errors": status_counts["http_error"],
+        "client_errors": status_counts["client_error"],
+        "pending_after_drain": pending_after_drain,
+        "http_status_counts": dict(sorted(http_status_counts.items())),
+        "error_counts": dict(error_counts.most_common(10)),
         "latency_p50": pct(0.50),
         "latency_p95": pct(0.95),
         "latency_p99": pct(0.99),
