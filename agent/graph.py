@@ -72,7 +72,7 @@ def llm() -> ChatOpenAI:
 
 def _attach_schema(state: AgentState) -> dict:
     """Provided. Render the DB schema once at the start of the run."""
-    return {"schema": render_schema(state.db_id)}
+    return {"schema": render_schema(state.db_id, state.question)}
 
 
 def _extract_sql(text: str) -> str:
